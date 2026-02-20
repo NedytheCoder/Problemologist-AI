@@ -119,6 +119,9 @@ async def run_agent(request: AgentRunRequest):
 
     # Create task and register it
     import asyncio
+    
+    with open("/tmp/debug_main.log", "a") as f:
+        f.write(f"DEBUG: run_agent called for episode {episode_id}\n")
 
     task = asyncio.create_task(
         execute_agent_task(

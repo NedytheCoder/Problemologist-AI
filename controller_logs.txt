@@ -1,0 +1,16 @@
+INFO:     Will watch for changes in these directories: ['/app/controller', '/app/shared']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [1] using StatReload
+Started server process [8]
+Waiting for application startup.
+[2m2026-02-17T21:10:07.706425Z[0m [[32m[1minfo     [0m] [1mconnected_to_temporal         [0m [36mfilename[0m=[35mmain.py[0m [36mfunc_name[0m=[35mlifespan[0m [36mlineno[0m=[35m40[0m [36murl[0m=[35mtemporal:7233[0m
+Application startup complete.
+WARNING:  StatReload detected changes in 'controller/api/tasks.py'. Reloading...
+Shutting down
+Waiting for application shutdown.
+Application shutdown complete.
+Finished server process [8]
+Started server process [1126]
+Waiting for application startup.
+[2m2026-02-17T21:25:16.135350Z[0m [[32m[1minfo     [0m] [1mconnected_to_temporal         [0m [36mfilename[0m=[35mmain.py[0m [36mfunc_name[0m=[35mlifespan[0m [36mlineno[0m=[35m40[0m [36murl[0m=[35mtemporal:7233[0m
+Application startup complete.

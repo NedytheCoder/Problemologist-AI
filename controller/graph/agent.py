@@ -1,13 +1,13 @@
 from deepagents import create_deep_agent
 from langchain_openai import ChatOpenAI
-
+from langchain_core.messages import AIMessage, ToolMessage, ToolCall
 from controller.clients.backend import RemoteFilesystemBackend
 from controller.config.settings import settings
 from controller.observability.langfuse import get_langfuse_callback
 from controller.prompts import get_prompt
 from shared.cots.agent import search_cots_catalog
 from shared.logging import get_logger
-
+#! First of all, there was no .env and openapi stuff, then the mock agent response was only pure json and wasn't langchain format that the agent expected
 logger = get_logger(__name__)
 
 
@@ -21,22 +21,18 @@ def create_agent_graph(
     if settings.is_integration_test:
         from typing import Any
 
-        from langchain_core.language_models.chat_models import BaseChatModel
-        from langchain_core.messages import AIMessage, BaseMessage
-        from langchain_core.outputs import ChatGenerationChunk, ChatResult
-
-        class FakeModelWithTools(BaseChatModel):
+        class FakeModelWithTools:
             responses: list[str]
             model_name: str = "mock-model"
             _current_response_idx: int = 0
 
             def _generate(
                 self,
-                messages: list[BaseMessage],
+                messages: list[Any],
                 stop: list[str] | None = None,
                 run_manager: Any = None,
                 **kwargs: Any,
-            ) -> ChatResult:
+            ) -> Any:
                 _ = messages, stop, run_manager, kwargs
                 if self._current_response_idx >= len(self.responses):
                     raise ValueError(
@@ -44,11 +40,7 @@ def create_agent_graph(
                     )
                 response_content = self.responses[self._current_response_idx]
                 self._current_response_idx += 1
-                return ChatResult(
-                    generations=[
-                        ChatGenerationChunk(message=AIMessage(content=response_content))
-                    ]
-                )
+                return type('MockResult', (), {'generations': [type('MockGeneration', (), {'message': type('MockMessage', (), {'content': response_content})})]})()
 
             @property
             def _llm_type(self) -> str:
@@ -60,26 +52,77 @@ def create_agent_graph(
 
             async def ainvoke(self, input_data, config=None, **kwargs):
                 import asyncio
+                await asyncio.sleep(1.0)  # Simulate processing time
+                return await self._generate(input_data, **kwargs)
 
-                await asyncio.sleep(
-                    1.0
-                )  # Simulate some processing time for interruption
-                return await super().ainvoke(input_data, config, **kwargs)
+            def with_config(self, config: Any) -> Any:
+                llm = FakeModelWithTools()
+                llm.responses = [
+                    # Tool call to write file - properly formatted JSON
+                    '{"action": "write_file", "action_input": {"path": "worker_execution.txt", "content": "verified"}}',
+                    # Tool result for write_file
+                    'File written successfully to worker_execution.txt',
+                    # Tool call to submit for review
+                    '{"action": "submit_for_review", "action_input": {"script_path": "solution.py"}}',
+                    # Tool result for submit_for review
+                    'Solution submitted for review',
+                    # Final completion message
+                    "I have completed task successfully by writing a verification file and submitting it for review.",
+                ]
+                return llm
 
-        # Responses that perform some basic tool calls to satisfy tests
-        # We provide a generous sequence of tool calls and completions
-        responses = [
+            responses = [
+
+                # 1️⃣ AI calls write_file
+                AIMessage(
+                    content="",
+                 tool_calls=[
+                    ToolCall(
+                        id="call_1",
+                        name="write_file",
+                        args={"path": "worker_execution.txt", "content": "verified"}
+                    )
+                ]
+                ),
+
+                # 2️⃣ Tool responds
+                ToolMessage(
+                    content="File written successfully to worker_execution.txt",
+                    tool_call_id="call_1",
+                ),
+
+                # 3️⃣ AI calls submit_for_review
+                AIMessage(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            id="call_2",
+                            name="submit_for_review",
+                            args={"script_path": "solution.py"}
+                        )
+                    ],
+                ),
+
+                # 4️⃣ Tool responds
+                ToolMessage(
+                    content="Solution submitted for review",
+                    tool_call_id="call_2",
+                ),
+
+                # 5️⃣ Final AI message
+                AIMessage(
+                    content="I have completed task successfully by writing a verification file and submitting it for review."
+                ),
+            ]
+
+        llm = FakeModelWithTools()
+        llm.responses = [
             '{"action": "write_file", "action_input": {"path": "worker_execution.txt", "content": "verified"}}',
+            'File written successfully to worker_execution.txt',
             '{"action": "submit_for_review", "action_input": {"script_path": "solution.py"}}',
-            "I have completed the task successfully.",
-            # Add more for potential retries or subagent calls
-            '{"action": "write_file", "action_input": {"path": "plan.md", "content": "## 1. Solution Overview\\nDone."}}',
-            '{"action": "write_file", "action_input": {"path": "todo.md", "content": "- [x] Task"}}',
-            '{"action": "write_file", "action_input": {"path": "objectives.yaml", "content": "objectives: {}"}}',
-            '{"action": "submit_for_review", "action_input": {"script_path": "solution.py"}}',
-            "Handover complete.",
+            'Solution submitted for review',
+            "I have completed task successfully by writing a verification file and submitting it for review.",
         ]
-        llm = FakeModelWithTools(responses=responses)
     else:
         llm = ChatOpenAI(
             model_name=settings.llm_model,

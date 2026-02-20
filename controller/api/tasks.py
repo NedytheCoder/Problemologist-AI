@@ -50,6 +50,8 @@ async def execute_agent_task(
     session_id: str,
     agent_name: str = "engineer_coder",
 ):
+    with open("/tmp/tasks_debug.log", "a") as f:
+        f.write(f"DEBUG: execute_agent_task started for episode {episode_id}\n")
     session_factory = get_sessionmaker()
 
     try:
@@ -186,9 +188,12 @@ async def execute_agent_task(
                     traceback=traceback.format_exc(),
                     episode_id=episode_id,
                 )
+                with open("/app/tasks_debug.log", "a") as f:
+                    f.write(f"CRITICAL FAILURE: {e}\n{traceback.format_exc()}\n")
                 episode = await db.get(Episode, episode_id)
                 if episode:
                     episode.status = EpisodeStatus.FAILED
+                    episode.plan = f"FAILURE TRACEBACK:\n{traceback.format_exc()}"
                     await db.commit()
 
     finally:
