@@ -17,7 +17,12 @@ if not os.environ.get("PYSPICE_LIBRARY_PATH"):
 
 from PySpice.Spice.Netlist import Circuit
 from PySpice.Unit import *
-from shared.models.schemas import CircuitValidationResult, PowerSupplyConfig
+from shared.models.schemas import (
+    CircuitValidationResult,
+    PowerSupplyConfig,
+    PowerBudgetResult,
+    ElectronicComponent,
+)
 from shared.observability.events import emit_event
 from shared.observability.schemas import CircuitValidationEvent
 
@@ -102,14 +107,9 @@ def simulate_circuit_transient(
     circuit: Circuit, duration_s: float, step_s: float
 ) -> Any:
     """
-
-
     Run a transient simulation.
 
-
     Useful for seeing how voltages/currents change over time (e.g. motor start).
-
-
     """
 
     simulator = circuit.simulator()
@@ -117,30 +117,33 @@ def simulate_circuit_transient(
     return simulator.transient(step_time=step_s, end_time=duration_s)
 
 
-def calculate_power_budget(circuit: Circuit, psu_config: PowerSupplyConfig) -> dict:
+def calculate_power_budget(
+    circuit: Circuit,
+    psu_config: PowerSupplyConfig,
+    motors: list[ElectronicComponent] | None = None,
+) -> PowerBudgetResult:
     """
-
-
     Calculate the power budget for the circuit compared to PSU capacity.
-
-
     """
-
     res = validate_circuit(circuit, psu_config)
-
     total_draw = res.total_draw_a
-
     capacity = psu_config.max_current_a
-
     margin = capacity - total_draw
-
     margin_pct = (margin / capacity * 100.0) if capacity > 0 else 0.0
 
-    return {
-        "total_draw_a": round(total_draw, 3),
-        "max_capacity_a": round(capacity, 3),
-        "margin_a": round(margin, 3),
-        "margin_pct": round(margin_pct, 1),
-        "is_safe": res.valid and total_draw <= capacity,
-        "errors": res.errors,
-    }
+    errors = res.errors.copy()
+    if total_draw > capacity:
+        # Overcurrent already caught by validate_circuit, but we can be explicit here
+        pass
+
+    # If motors list is provided, we can verify they all have non-zero current/voltage
+    # but for now we follow the requested output fields.
+
+    return PowerBudgetResult(
+        total_draw_a=round(total_draw, 3),
+        psu_capacity_a=round(capacity, 3),
+        margin_a=round(margin, 3),
+        margin_pct=round(margin_pct, 1),
+        is_safe=res.valid and total_draw <= capacity,
+        errors=errors,
+    )

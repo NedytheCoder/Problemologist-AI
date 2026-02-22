@@ -256,6 +256,17 @@ class CircuitValidationResult(BaseModel):
     warnings: list[str] = []
 
 
+class PowerBudgetResult(BaseModel):
+    """Structured result for power budget tool."""
+
+    total_draw_a: float
+    psu_capacity_a: float
+    margin_a: float
+    margin_pct: float
+    is_safe: bool
+    errors: list[str] = []
+
+
 class ObjectivesYaml(BaseModel):
     """
     The objectives.yaml schema - central data exchange object.
